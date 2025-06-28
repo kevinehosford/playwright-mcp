@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import { defineTool } from './tool.js';
+import { paginationSchema, filterSchema, applyPagination, applyTextFilter, formatPaginationInfo } from './pagination.js';
 
 import type * as playwright from 'playwright';
 
@@ -26,19 +27,62 @@ const requests = defineTool({
     name: 'browser_network_requests',
     title: 'List network requests',
     description: 'Returns all network requests since loading the page',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      ...paginationSchema.shape,
+      ...filterSchema.shape,
+      method: z.string().optional().describe('Filter by HTTP method (GET, POST, etc.)'),
+      status: z.number().int().min(100).max(599).optional().describe('Filter by HTTP status code'),
+      url: z.string().optional().describe('Filter by URL pattern'),
+    }),
     type: 'readOnly',
   },
 
-  handle: async context => {
+  handle: async (context, params) => {
     const requests = context.currentTabOrDie().requests();
-    const log = [...requests.entries()].map(([request, response]) => renderRequest(request, response)).join('\n');
+    let requestEntries = [...requests.entries()];
+
+    // Apply filtering
+    if (params.method) {
+      const methodFilter = params.method.toUpperCase();
+      requestEntries = requestEntries.filter(([request]) =>
+        request.method().toUpperCase() === methodFilter
+      );
+    }
+
+    if (params.status) {
+      requestEntries = requestEntries.filter(([, response]) =>
+        response?.status() === params.status
+      );
+    }
+
+    if (params.url) {
+      const urlPattern = params.url.toLowerCase();
+      requestEntries = requestEntries.filter(([request]) =>
+        request.url().toLowerCase().includes(urlPattern)
+      );
+    }
+
+    if (params.filter) {
+      requestEntries = applyTextFilter(
+          requestEntries,
+          params.filter,
+          ([request, response]) => `${request.method()} ${request.url()} ${response?.status() || ''} ${response?.statusText() || ''}`
+      );
+    }
+
+    // Apply pagination
+    const paginatedResult = applyPagination(requestEntries, params);
+    const log = paginatedResult.items.map(([request, response]) => renderRequest(request, response)).join('\n');
+    const paginationInfo = formatPaginationInfo(paginatedResult.metadata);
+
     return {
       code: [`// <internal code to list network requests>`],
       action: async () => {
-        return {
-          content: [{ type: 'text', text: log }]
-        };
+        const content: { type: 'text'; text: string }[] = [];
+        if (log)
+          content.push({ type: 'text', text: log });
+        content.push({ type: 'text', text: `\n---\n${paginationInfo}` });
+        return { content };
       },
       captureSnapshot: false,
       waitForNetwork: false,

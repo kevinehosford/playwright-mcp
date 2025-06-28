@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import { defineTool } from './tool.js';
+import { paginationSchema, filterSchema, applyPagination, applyTextFilter, formatPaginationInfo } from './pagination.js';
 
 const console = defineTool({
   capability: 'core',
@@ -23,18 +24,42 @@ const console = defineTool({
     name: 'browser_console_messages',
     title: 'Get console messages',
     description: 'Returns all console messages',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      ...paginationSchema.shape,
+      ...filterSchema.shape,
+      type: z.enum(['log', 'error', 'warn', 'info', 'debug', 'trace']).optional().describe('Filter by message type'),
+    }),
     type: 'readOnly',
   },
-  handle: async context => {
-    const messages = context.currentTabOrDie().consoleMessages();
-    const log = messages.map(message => `[${message.type().toUpperCase()}] ${message.text()}`).join('\n');
+  handle: async (context, params) => {
+    let messages = context.currentTabOrDie().consoleMessages();
+
+    // Apply filtering by type
+    if (params.type)
+      messages = messages.filter(message => message.type() === params.type);
+
+    // Apply text filtering
+    if (params.filter) {
+      messages = applyTextFilter(
+          messages,
+          params.filter,
+          message => `${message.type()} ${message.text()}`
+      );
+    }
+
+    // Apply pagination
+    const paginatedResult = applyPagination(messages, params);
+    const log = paginatedResult.items.map(message => `[${message.type().toUpperCase()}] ${message.text()}`).join('\n');
+    const paginationInfo = formatPaginationInfo(paginatedResult.metadata);
+
     return {
       code: [`// <internal code to get console messages>`],
       action: async () => {
-        return {
-          content: [{ type: 'text', text: log }]
-        };
+        const content: { type: 'text'; text: string }[] = [];
+        if (log)
+          content.push({ type: 'text', text: log });
+        content.push({ type: 'text', text: `\n---\n${paginationInfo}` });
+        return { content };
       },
       captureSnapshot: false,
       waitForNetwork: false,
