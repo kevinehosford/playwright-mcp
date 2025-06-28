@@ -594,7 +594,13 @@ X Y coordinate space, based on the provided screenshot.
 - **browser_network_requests**
   - Title: List network requests
   - Description: Returns all network requests since loading the page
-  - Parameters: None
+  - Parameters:
+    - `limit` (integer, optional): Maximum number of items to return (default: 50, max: 1000)
+    - `offset` (integer, optional): Number of items to skip (default: 0)
+    - `filter` (string, optional): Text to search for in the content
+    - `method` (string, optional): Filter by HTTP method (GET, POST, etc.)
+    - `status` (integer, optional): Filter by HTTP status code
+    - `url` (string, optional): Filter by URL pattern
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -602,7 +608,11 @@ X Y coordinate space, based on the provided screenshot.
 - **browser_console_messages**
   - Title: Get console messages
   - Description: Returns all console messages
-  - Parameters: None
+  - Parameters:
+    - `limit` (integer, optional): Maximum number of items to return (default: 50, max: 1000)
+    - `offset` (integer, optional): Number of items to skip (default: 0)
+    - `filter` (string, optional): Text to search for in the content
+    - `type` (string, optional): Filter by message type
   - Read-only: **true**
 
 </details>
