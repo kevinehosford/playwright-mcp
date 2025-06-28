@@ -16,7 +16,6 @@
 
 import { z } from 'zod';
 import { defineTool, type ToolFactory } from './tool.js';
-import { paginationSchema, filterSchema } from './pagination.js';
 
 const listTabs = defineTool({
   capability: 'tabs',
@@ -25,12 +24,7 @@ const listTabs = defineTool({
     name: 'browser_tab_list',
     title: 'List tabs',
     description: 'List browser tabs',
-    inputSchema: z.object({
-      ...paginationSchema.shape,
-      ...filterSchema.shape,
-      url: z.string().optional().describe('Filter by URL pattern'),
-      title: z.string().optional().describe('Filter by tab title'),
-    }),
+    inputSchema: z.object({}),
     type: 'readOnly',
   },
 
@@ -43,7 +37,7 @@ const listTabs = defineTool({
       resultOverride: {
         content: [{
           type: 'text',
-          text: await context.listTabsMarkdown(params),
+          text: await context.listTabsMarkdown(),
         }],
       },
     };

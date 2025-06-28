@@ -21,13 +21,11 @@ import { callOnPageNoTrace, waitForCompletion } from './tools/utils.js';
 import { ManualPromise } from './manualPromise.js';
 import { Tab } from './tab.js';
 import { outputFile } from './config.js';
-import { applyPagination, applyTextFilter, formatPaginationInfo } from './tools/pagination.js';
 
 import type { ImageContent, TextContent } from '@modelcontextprotocol/sdk/types.js';
 import type { ModalState, Tool, ToolActionResult } from './tools/tool.js';
 import type { FullConfig } from './config.js';
 import type { BrowserContextFactory } from './browserContextFactory.js';
-import type { PaginationParams, FilterParams } from './tools/pagination.js';
 
 type PendingAction = {
   dialogShown: ManualPromise<void>;
@@ -114,70 +112,17 @@ export class Context {
     return this._currentTab!;
   }
 
-  async listTabsMarkdown(params?: PaginationParams & FilterParams & { url?: string; title?: string }): Promise<string> {
+  async listTabsMarkdown(): Promise<string> {
     if (!this._tabs.length)
       return '### No tabs open';
 
-    let filteredTabs = this._tabs;
-
-    // Apply URL filtering
-    if (params?.url) {
-      const urlPattern = params.url.toLowerCase();
-      filteredTabs = filteredTabs.filter(tab => tab.page.url().toLowerCase().includes(urlPattern));
-    }
-
-    // Apply title filtering
-    if (params?.title) {
-      const titlePattern = params.title.toLowerCase();
-      const tabsWithTitles = await Promise.all(
-          filteredTabs.map(async tab => ({ tab, title: await tab.title() }))
-      );
-      filteredTabs = tabsWithTitles
-          .filter(({ title }) => title.toLowerCase().includes(titlePattern))
-          .map(({ tab }) => tab);
-    }
-
-    // Apply general text filtering
-    if (params?.filter) {
-      const tabsWithContent = await Promise.all(
-          filteredTabs.map(async tab => ({
-            tab,
-            searchText: `${await tab.title()} ${tab.page.url()}`
-          }))
-      );
-      filteredTabs = applyTextFilter(
-          tabsWithContent,
-          params.filter,
-          ({ searchText }) => searchText
-      ).map(({ tab }) => tab);
-    }
-
-    // Apply pagination
-    const paginatedResult = applyPagination(filteredTabs, params || {});
-
-    if (paginatedResult.items.length === 0) {
-      const paginationInfo = formatPaginationInfo(paginatedResult.metadata);
-      return `### No tabs match the criteria\n${paginationInfo}`;
-    }
-
     const lines: string[] = ['### Open tabs'];
-    for (let i = 0; i < paginatedResult.items.length; i++) {
-      const tab = paginatedResult.items[i];
-      const originalIndex = this._tabs.indexOf(tab) + 1;
+    for (let i = 0; i < this._tabs.length; i++) {
+      const tab = this._tabs[i];
       const title = await tab.title();
       const url = tab.page.url();
       const current = tab === this._currentTab ? ' (current)' : '';
-      lines.push(`- ${originalIndex}:${current} [${title}] (${url})`);
-    }
-
-    // Only show pagination info if the results were actually limited by pagination or filtering
-    const resultCountLimited = paginatedResult.items.length < this._tabs.length;
-    const hasFilteringParams = params && (params.filter || params.url || params.title);
-    const hasPaginationParams = params && (params.limit !== undefined || params.offset !== undefined);
-    
-    if (resultCountLimited || hasFilteringParams || hasPaginationParams) {
-      const paginationInfo = formatPaginationInfo(paginatedResult.metadata);
-      lines.push('', '---', paginationInfo);
+      lines.push(`- ${i + 1}:${current} [${title}] (${url})`);
     }
 
     return lines.join('\n');
